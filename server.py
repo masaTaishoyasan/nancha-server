@@ -1,15 +1,26 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from openai import OpenAI
 
 app = FastAPI()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise RuntimeError("OPENAI_API_KEY is not set")
+
+client = OpenAI(api_key=api_key)
+
 
 class ChatRequest(BaseModel):
     message: str
     bot_type: str
+
+
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
 
 @app.post("/chat")
 def chat(req: ChatRequest):
@@ -22,18 +33,42 @@ def chat(req: ChatRequest):
         return {"reply": "ちょっと長いで、それ"}
 
     if req.bot_type == "iinkai":
-        system_prompt = "関西の討論番組風に、軽く皮肉を交えて短く答えてください。"
+        system_prompt = (
+            "あなたは関西の討論番組ふうのキャラクターです。"
+            "関西弁で、軽く皮肉を交えつつ、短く自然に返答してください。"
+            "攻撃的になりすぎず、雑談として成立する範囲で返してください。"
+        )
+    elif req.bot_type == "hanshin":
+        system_prompt = (
+            "あなたは関西の野球ファンふうのキャラクターです。"
+            "関西弁で、明るく、勢いよく、短く自然に返答してください。"
+            "攻撃的な表現は避けてください。"
+        )
     else:
-        system_prompt = "関西の野球ファン風に、楽しく短く答えてください。"
+        system_prompt = "関西弁で短く自然に返答してください。"
 
-    res = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text}
-        ],
-        max_tokens=120
-    )
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ],
+            max_tokens=120
+        )
 
-    reply = res.choices[0].message.content
-    return {"reply": reply}
+        print("RAW RESPONSE:", res)
+
+        if not res.choices:
+            return {"reply": "返答が空やで"}
+
+        reply = res.choices[0].message.content
+
+        if not reply:
+            reply = "なんかうまく返せへんかったわ"
+
+        return {"reply": reply}
+
+    except Exception as e:
+        print("ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
