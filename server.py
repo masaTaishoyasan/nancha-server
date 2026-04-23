@@ -83,7 +83,7 @@ def chat(req: ChatRequest):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text}
             ],
-            max_tokens=600
+            max_tokens=200
         )
 
         print("RAW RESPONSE:", res)
