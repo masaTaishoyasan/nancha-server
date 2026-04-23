@@ -99,7 +99,8 @@ def chat(req: ChatRequest):
         if not reply:
             reply = "なんかうまく返せへんかったわ"
 
-        return {"reply": reply}
+        return {"reply": reply_text}
+
 
     except Exception as e:
         print("ERROR:", repr(e))
