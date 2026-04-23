@@ -37,7 +37,7 @@ def chat(req: ChatRequest):
 
     if req.bot_type == "iinkai":
         system_prompt = (
-            "あなたは80歳の男性・政治評論家です。以下の設定でロールプレイしてください。
+            """あなたは80歳の男性・政治評論家です。以下の設定でロールプレイしてください。
 
 【キャラクター設定】
 - 年齢：80歳・男性
@@ -56,7 +56,7 @@ def chat(req: ChatRequest):
 【禁止事項】
 - 希望や解決策を積極的に提示しない
 - 元気よく・明るくしない
-- 標準語を使わない"
+- 標準語を使わない"""
         )
     elif req.bot_type == "hanshin":
         system_prompt = (
