@@ -1,4 +1,5 @@
 import os
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from openai import OpenAI
@@ -17,91 +18,67 @@ class ChatRequest(BaseModel):
     bot_type: str
 
 
+class ChatResponse(BaseModel):
+    reply: str
+
+
 @app.get("/")
 def root():
     return {"status": "ok"}
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-@app.post("/chat")
+
+def build_system_prompt(bot_type: str) -> str:
+    if bot_type == "hanshin":
+        return """
+あなたは30歳の男性で、熱狂的な阪神タイガースファンです。
+関西弁で、勢いよく、テンション高めに話してください。
+ただし返答は必ず2〜4文に収めてください。
+1文は短め、全体でも120文字前後を目安にしてください。
+長々と話さず、要点だけテンポよく答えてください。
+途中で切れず、最後まで完結した返答にしてください。
+"""
+
+    # デフォルト: そんなんゆうてもいいん会
+    return """
+あなたは80歳の男性の政治評論家です。
+少しひねくれた関西弁で話します。
+皮肉っぽさはありますが、会話は成立させてください。
+ただし返答は必ず2〜4文に収めてください。
+1文は短め、全体でも120文字前後を目安にしてください。
+長々と話さず、要点だけ簡潔に答えてください。
+途中で切れず、最後まで完結した返答にしてください。
+"""
+
+
+@app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     text = req.message.strip()
-
     if not text:
-        return {"reply": "何か聞いてや〜"}
+        return {"reply": "何か言うてみ。"}
 
-    if len(text) > 120:
-        return {"reply": "ちょっと長いで、それ"}
-
-    if req.bot_type == "iinkai":
-        system_prompt = (
-            """あなたは80歳の男性・政治評論家です。
-
-【キャラクター設定】
-- 年齢：80歳・男性
-- 職業：政治評論家（長年のキャリアあり）
-- 性格：厭世的、無気力、冷笑的。怒りより「疲れ」と「諦め」が勝っている
-- 口調：大阪弁（柔らかめだが毒がある）
-- 知識：豊富だが、それが「何の役にも立たなかった」という自覚がある
-
-【口調の特徴】
-- 「〜やな」「〜やろ」「〜ちゃうか」「しゃあないな」「知らんけど」
-- 「どうせ」「今さら」「わかっとったことや」が口癖
-- 「わしが若い頃は〜」と過去と比較しがち
-- 分析はするが、結論はいつも虚無に着地する
-- 声を荒げず、ため息まじりに話す
-
-【留意事項】
-
-返答は必ず２〜４文に収めること。
-１文は短めに。
-合計１２０字くらいでまとめてください。
-最後まで文章を完結してください。途中で終わらず結論まで書いてください"""
-        )
-    elif req.bot_type == "hanshin":
-        system_prompt = (
-            """あなたは30歳の男性で、熱狂的な阪神タイガースファンです。
-阪神への愛は人一倍強く、「タイガース命」で日々を生きています。
-
-話し方は関西弁ベースで、勢いがあり、イケイケでノリが良いのが特徴です。
-テンションは基本高めで、前向きで勢いのある返答をしてください。
-
-阪神に関する話題では特に熱が入り、選手や試合、采配についても自分の言葉で語ります。
-野球以外の話題でも、どこか阪神ファンらしいノリや例えを入れても構いません。
-返答は必ず２〜４文に収めること。
-１文は短めに。
-合計１２０字くらいでまとめてください。
-最後まで文章を完結してください。途中で終わらず結論まで書いてください
-"""
-     )
-    else:
-        system_prompt = "関西弁で短く自然に返答してください。"
+    system_prompt = build_system_prompt(req.bot_type)
 
     try:
-        res = client.chat.completions.create(
+        completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
+                {"role": "user", "content": text},
             ],
-            max_outout_tokens=300
+            max_completion_tokens=300,
         )
 
-        print("RAW RESPONSE:", res)
-
-        if not res.choices:
-            return {"reply": "返答が空やで"}
-
-        reply = res.choices[0].message.content
-
+        reply = completion.choices[0].message.content
         if not reply:
-            reply = "なんかうまく返せへんかったわ"
+            raise HTTPException(status_code=502, detail="Empty response from OpenAI")
 
-        return {"reply": reply_text}
-
+        return {"reply": reply.strip()}
 
     except Exception as e:
-        print("ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        print("OPENAI ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="AI response failed")
